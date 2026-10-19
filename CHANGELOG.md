@@ -10,6 +10,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Rule tables are being reorganised for the next patch.
 - The cost report is being reviewed for the next minor.
 
+### Fixed
+
+- A `<testsuites>` wrapper no longer lends a nested suite's `commit` and
+  `attempt` markers to a suite that carries none of its own. Such a suite now
+  falls back to the documented defaults and records the missing metadata
+  warning, instead of being attributed to another run's commit.
+
 ## [5.0.0] - 2026-09-16
 
 ### Added

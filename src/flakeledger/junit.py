@@ -60,18 +60,41 @@ class CaseResult:
         return self.name
 
 
-def _read_run_metadata(elem: ET.Element) -> tuple[str, int, bool]:
+def _own_properties(elem: ET.Element) -> list[ET.Element]:
+    """Return the `<property>` elements that belong to `elem` itself.
+
+    Only the element's own `<properties>` block and its direct `<property>`
+    children qualify. Elements nested deeper belong to another element: a
+    `<testsuites>` wrapper does not own the markers of the suites inside it.
+    """
+
+    return list(elem.findall("properties/property")) + list(elem.findall("property"))
+
+
+def _read_run_metadata(
+    elem: ET.Element, own_only: bool = False
+) -> tuple[str, int, bool]:
     """Return (commit, attempt, used_default) from a suite-level element.
 
     Reads attributes first, then `<property name=...>` children. Missing
     values fall back to documented defaults and set used_default to True.
+
+    With `own_only` the `<property>` lookup is restricted to the element's
+    own markers. A `<testsuites>` wrapper holds several suites, each with
+    its own run identity, so the wrapper may only supply markers it carries
+    itself. Reading the nested suites' markers would attribute another run's
+    results to this one, and would silence the missing metadata warning.
     """
 
     commit = elem.get("commit")
     attempt_raw = elem.get("attempt")
 
     if commit is None or attempt_raw is None:
-        for prop in elem.iter("property"):
+        if own_only:
+            props = _own_properties(elem)
+        else:
+            props = list(elem.iter("property"))
+        for prop in props:
             pname = prop.get("name")
             if pname == "commit" and commit is None:
                 commit = prop.get("value")
@@ -147,7 +170,10 @@ def parse_file(path: str | Path) -> tuple[list[CaseResult], list[str]]:
 
         commit, attempt, used_default = _read_run_metadata(suite)
         if used_default:
-            fallback = _read_run_metadata(root)
+            # The root may carry the run identity for its suites, but only
+            # its own markers: the suites nested inside it describe other
+            # runs and must not lend their commit to this one.
+            fallback = _read_run_metadata(root, own_only=True)
             commit_r, attempt_r, root_default = fallback
             if not root_default:
                 commit, attempt, used_default = commit_r, attempt_r, False
